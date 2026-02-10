@@ -44,19 +44,16 @@ It produces *validated alignment decisions* to enable safe downstream actions.
 
 ## System Architecture
 
-CSV Input
-↓
-Column Sample Extraction
-↓
-Bounded Prompt Construction
-↓
-LLM Mapping Suggestions
-↓
-Contract Enforcement (Pydantic)
-↓
-Confidence-Based Validation
-↓
-Accepted / Rejected Mappings
+The schema alignment pipeline follows a deterministic, staged flow:
+
+1. **CSV Input**
+2. **Column Sample Extraction**
+3. **Bounded Prompt Construction**
+4. **LLM Mapping Suggestions**
+5. **Contract Enforcement (Pydantic)**
+6. **Confidence-Based Validation**
+7. **Accepted / Rejected Mappings**
+
 
 
 ---
@@ -69,23 +66,25 @@ Accepted / Rejected Mappings
 - **Separation of decision logic from execution**
 - **Explainability and auditability by design**
 
+
 ---
 
 ## End-to-End Demo
 
-Given an input CSV:
+## End-to-End Demo
 
+### Input CSV
 Email Address, Contact, Country, Full Name
 
-
-The system produces:
-
-- `Email Address → email` (confidence: 0.96) ✅
-- `Contact → phone_number` (confidence: 0.92) ✅
-- `Country → country` (confidence: 0.97) ✅
-- `Full Name → first_name` (confidence: 0.65) ❌ (ambiguous, rejected)
+### System Output
+Email Address → email        (confidence: 0.96)  ✓
+Contact       → phone_number (confidence: 0.92)  ✓
+Country       → country      (confidence: 0.97)  ✓
+Full Name     → first_name   (confidence: 0.65)  ✗  (rejected: ambiguous)
 
 Only high-confidence, schema-safe mappings are accepted.
+Ambiguous mappings are explicitly rejected for manual review.
+
 
 ---
 
