@@ -1,38 +1,117 @@
 # Canonical Data Schema Alignment System
 
-This project implements an AI-assisted system to align heterogeneous,
-messy input datasets into a clean, canonical data schema.
+An AI-assisted, production-oriented schema alignment engine that analyzes
+heterogeneous CSV datasets and produces validated, confidence-scored mappings
+against a predefined canonical schema.
 
-Real-world data rarely follows consistent naming conventions or formats.
-Different vendors, teams, or tools produce datasets with varying column
-names, structures, and semantics. Manual schema mapping is slow, error-prone,
-and difficult to scale.
-
-This system assists the schema alignment process by combining constrained
-LLM-based semantic reasoning with deterministic validation logic to produce
-reliable, explainable mappings.
+The system is designed to assist safe downstream data ingestion by treating
+LLM outputs as *suggestions*, not authority, and enforcing deterministic
+validation rules before any automation is allowed.
 
 ---
 
-## Problem Statement
+## Problem Context
 
-Given an input dataset with unknown or inconsistent column definitions,
-automatically determine how each field maps to a predefined canonical schema,
-while preventing incorrect or low-confidence mappings from being applied.
+In real-world data pipelines, incoming datasets from vendors, partners, or
+legacy systems rarely follow consistent naming conventions or structures.
+
+Examples:
+- `Email`, `Email Address`, `User Mail`
+- `Phone`, `Contact`, `Mobile No`
+- `Country`, `Nation`, `Location`
+
+Manual schema mapping is slow, error-prone, and does not scale.  
+Blindly trusting LLM-based mappings introduces a high risk of silent data
+corruption.
 
 ---
 
-## High-Level Approach
+## Solution Overview
 
-- Analyze column names and sample values from input data
-- Propose schema mappings using constrained LLM reasoning
-- Assign confidence scores to each proposed mapping
-- Apply deterministic validation rules before accepting mappings
-- Flag low-confidence cases for manual review
+This system implements a **schema alignment decision engine** that:
+
+- Extracts representative samples from raw CSV data
+- Uses constrained LLM reasoning to suggest semantic mappings
+- Enforces strict schema contracts on AI outputs
+- Applies confidence-based deterministic validation
+- Accepts only high-confidence, schema-safe mappings
+- Flags ambiguous cases for manual review
+
+The system **does not write to databases**.  
+It produces *validated alignment decisions* to enable safe downstream actions.
+
+---
+
+## System Architecture
+
+CSV Input
+↓
+Column Sample Extraction
+↓
+Bounded Prompt Construction
+↓
+LLM Mapping Suggestions
+↓
+Contract Enforcement (Pydantic)
+↓
+Confidence-Based Validation
+↓
+Accepted / Rejected Mappings
+
+
+---
+
+## Key Design Principles
+
+- **AI as a recommender, not an authority**
+- **Strict contracts over free-form outputs**
+- **Deterministic validation over probabilistic trust**
+- **Separation of decision logic from execution**
+- **Explainability and auditability by design**
+
+---
+
+## End-to-End Demo
+
+Given an input CSV:
+
+Email Address, Contact, Country, Full Name
+
+
+The system produces:
+
+- `Email Address → email` (confidence: 0.96) ✅
+- `Contact → phone_number` (confidence: 0.92) ✅
+- `Country → country` (confidence: 0.97) ✅
+- `Full Name → first_name` (confidence: 0.65) ❌ (ambiguous, rejected)
+
+Only high-confidence, schema-safe mappings are accepted.
+
+---
+
+## Project Scope
+
+### What this system does
+- Produces validated schema alignment decisions
+- Prevents low-confidence or invalid mappings
+- Handles real-world LLM integration issues (streaming output, model failures)
+
+### What this system does NOT do
+- Modify CSV files
+- Write to production databases
+- Execute data transformations
+
+Downstream systems are expected to apply accepted mappings with appropriate
+human or automated approval workflows.
 
 ---
 
 ## Project Status
 
-Active development with a focus on correctness, explainability, and
-production-oriented system design.
+Core schema alignment engine completed.
+
+Planned next phase:
+- MCP server layer to expose the engine as callable tools
+- Human review workflows for rejected mappings
+- Extended field decomposition (e.g., full name splitting)
+
