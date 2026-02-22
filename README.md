@@ -92,6 +92,30 @@ Only high-confidence, schema-safe mappings are accepted. Ambiguous mappings are 
 Downstream systems are expected to apply accepted mappings with appropriate human or automated approval workflows.
 
 ---
+---
+
+## Application Service Layer
+
+To enable safe integration with external systems and AI agents, the core schema-alignment pipeline has been refactored behind an internal **Application Service Layer**.
+
+This service layer:
+
+- Orchestrates the alignment pipeline as a pure callable function
+- Decouples business logic from CLI-based execution
+- Returns structured, validated mapping decisions
+- Decouples the core decision engine from execution context, enabling safe invocation across integration surfaces such as MCP servers, REST APIs, or batch ingestion workflows.
+
+This allows upstream systems (e.g., ingestion pipelines, orchestration workflows, AI agents) to programmatically invoke schema analysis without embedding execution logic or interacting with CLI entrypoints.
+
+Example usage:
+
+```python
+from src.alignment_service import analyze_csv_schema
+
+mappings = analyze_csv_schema("vendor_dataset.csv")
+```
+
+This architectural boundary ensures the decision engine can be safely reused across integration surfaces such as MCP servers, REST APIs, or batch ingestion workflows.
 
 ## Project Status
 

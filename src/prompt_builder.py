@@ -1,5 +1,5 @@
 from typing import Dict, List
-from canonical_schema import CanonicalSchema
+from src.canonical_schema import CanonicalSchema
 
 
 def build_schema_mapping_prompt(

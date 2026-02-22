@@ -2,8 +2,8 @@ import json
 import subprocess
 from typing import List
 
-from mapping_contract import SchemaMapping
-from validator import validate_mapping
+from src.mapping_contract import SchemaMapping
+from src.validator import validate_mapping
 
 
 def call_ai(prompt: str) -> str:
