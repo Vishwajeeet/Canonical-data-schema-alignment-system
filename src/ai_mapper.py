@@ -1,9 +1,21 @@
 import json
 import subprocess
-from typing import List
+from typing import List, Dict, TypedDict
 
 from src.mapping_contract import SchemaMapping
 from src.validator import validate_mapping
+
+
+class ReviewItem(TypedDict):
+    """Represents a mapping that needs human review with its validation reason."""
+    mapping: SchemaMapping
+    reason: str
+
+
+class ValidationResult(TypedDict):
+    """Result of parsing and validating AI-generated schema mappings."""
+    accepted: List[SchemaMapping]
+    needs_review: List[ReviewItem]
 
 
 def call_ai(prompt: str) -> str:
@@ -30,8 +42,19 @@ def call_ai(prompt: str) -> str:
 
 
 
-def parse_and_validate(ai_output: str) -> List[SchemaMapping]:
-    mappings = []
+def parse_and_validate(ai_output: str) -> ValidationResult:
+    """
+    Parse AI output and categorize mappings by validation status.
+    
+    Returns:
+        ValidationResult dict with keys:
+        - "accepted": mappings that pass all validation checks
+        - "needs_review": mappings that fail validation with reasons (preserved for audit)
+    """
+    result = {
+        "accepted": [],
+        "needs_review": []
+    }
 
     try:
         # Split event-stream lines
@@ -46,17 +69,25 @@ def parse_and_validate(ai_output: str) -> List[SchemaMapping]:
 
         if not json_text:
             print("No JSON payload found in AI output")
-            return mappings
+            return result
 
         data = json.loads(json_text)
 
         for item in data:
             mapping = SchemaMapping(**item)
-            if validate_mapping(mapping):
-                mappings.append(mapping)
+            is_valid, reason = validate_mapping(mapping)
+            
+            if is_valid:
+                result["accepted"].append(mapping)
+            else:
+                # Wrap failed mapping with validation reason
+                result["needs_review"].append({
+                    "mapping": mapping,
+                    "reason": reason
+                })
 
     except Exception as e:
         print("Failed to parse AI output:", e)
 
-    return mappings
+    return result
 
