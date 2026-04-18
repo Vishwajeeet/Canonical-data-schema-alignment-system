@@ -19,75 +19,71 @@ class ValidationResult(TypedDict):
 
 
 def call_ai(prompt: str) -> str:
-    result = subprocess.run(
-        [
-            "opencode",
-            "run",
-            "-m",
-            "opencode/gpt-5-nano",
-            "--thinking", "false",
-            "--format", "json",
-            prompt,
-        ],
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
-
-    if result.stderr:
-        print("\n=== AI STDERR ===")
-        print(result.stderr)
-
-    return result.stdout
+    try:
+        result = subprocess.run(
+            [
+                "opencode",
+                "run",
+                "-m",
+                "opencode/gpt-5-nano",
+                "--thinking", "false",
+                "--format", "json",
+                prompt,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            stdin=subprocess.DEVNULL,  # Explicitly close stdin
+        )
+        return result.stdout
+    except FileNotFoundError:
+        return "[]"
+    except subprocess.TimeoutExpired:
+        return "[]"
+    except Exception:
+        return "[]"
 
 
 
 def parse_and_validate(ai_output: str) -> ValidationResult:
-    """
-    Parse AI output and categorize mappings by validation status.
-    
-    Returns:
-        ValidationResult dict with keys:
-        - "accepted": mappings that pass all validation checks
-        - "needs_review": mappings that fail validation with reasons (preserved for audit)
-    """
     result = {
         "accepted": [],
         "needs_review": []
     }
 
     try:
-        # Split event-stream lines
-        lines = ai_output.splitlines()
-
-        json_text = None
-        for line in lines:
-            if '"type":"text"' in line and '"text"' in line:
-                event = json.loads(line)
-                json_text = event["part"]["text"]
-                break
-
-        if not json_text:
-            print("No JSON payload found in AI output")
+        # Extract first JSON array from output
+        start_idx = ai_output.find('[')
+        if start_idx == -1:
+            return result
+        
+        end_idx = ai_output.rfind(']')
+        if end_idx == -1 or end_idx <= start_idx:
+            return result
+        
+        json_str = ai_output[start_idx:end_idx + 1]
+        data = json.loads(json_str)
+        
+        if not isinstance(data, list):
             return result
 
-        data = json.loads(json_text)
-
         for item in data:
-            mapping = SchemaMapping(**item)
-            is_valid, reason = validate_mapping(mapping)
-            
-            if is_valid:
-                result["accepted"].append(mapping)
-            else:
-                # Wrap failed mapping with validation reason
-                result["needs_review"].append({
-                    "mapping": mapping,
-                    "reason": reason
-                })
+            try:
+                mapping = SchemaMapping(**item)
+                is_valid, reason = validate_mapping(mapping)
+                
+                if is_valid:
+                    result["accepted"].append(mapping)
+                else:
+                    result["needs_review"].append({
+                        "mapping": mapping,
+                        "reason": reason
+                    })
+            except Exception:
+                continue
 
-    except Exception as e:
-        print("Failed to parse AI output:", e)
+    except Exception:
+        pass
 
     return result
 

@@ -22,33 +22,26 @@ def send_request(process, request):
 def read_streaming_response(process, expected_id=None, timeout=5.0):
     """
     Read and parse streaming responses from the server.
-    
     Handles responses that may be prefixed with "data: ".
-    Returns the first valid JSON object matching expected_id, or None on timeout/error.
     """
     start_time = time.time()
     
     while True:
-        # Check timeout
         elapsed = time.time() - start_time
         if elapsed > timeout:
             return None
         
-        # Check if process is still alive
         if process.poll() is not None:
             return None
         
-        # Check if data is available without blocking
         try:
             ready, _, _ = select.select([process.stdout], [], [], 0.1)
             if not ready:
-                # No data available yet, continue to next iteration (check timeout/process)
                 continue
         except (ValueError, OSError):
-            # select may not work on all platforms, fall back to sleep-based polling
             time.sleep(0.01)
+            continue
         
-        # Read a line (should not block since we checked with select)
         line = process.stdout.readline()
         if not line:
             return None
@@ -57,19 +50,15 @@ def read_streaming_response(process, expected_id=None, timeout=5.0):
         if not line:
             continue
         
-        # Extract JSON from different formats
         json_str = line
         if line.startswith("data:"):
             json_str = line[5:].strip()
         
-        # Try to parse JSON
         try:
             response = json.loads(json_str)
-            # Return if this is the response we're looking for
             if expected_id is None or response.get("id") == expected_id:
                 return response
         except json.JSONDecodeError:
-            # Not valid JSON, continue reading
             continue
 
 
@@ -95,7 +84,14 @@ def test_mcp_server():
             "jsonrpc": "2.0",
             "id": 1,
             "method": "initialize",
-            "params": {}
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {
+                    "name": "test-client",
+                    "version": "1.0"
+                }
+            }
         }
         send_request(process, initialize_request)
         
@@ -111,17 +107,35 @@ def test_mcp_server():
         print("\nSending initialized notification...")
         initialized_notification = {
             "jsonrpc": "2.0",
-            "method": "initialized",
+            "method": "notifications/initialized",
             "params": {}
         }
         send_request(process, initialized_notification)
         
-        # Step 3: Send call_tool request
-        print("\nSending call_tool request...")
-        call_tool_request = {
+        # Step 3: Send tools/list request
+        print("\nSending tools/list request...")
+        list_tools_request = {
             "jsonrpc": "2.0",
             "id": 2,
-            "method": "call_tool",
+            "method": "tools/list",
+            "params": {}
+        }
+        send_request(process, list_tools_request)
+        
+        # Read tools/list response
+        list_response = read_streaming_response(process, expected_id=2, timeout=10.0)
+        if list_response:
+            print(f"Tools list response: {json.dumps(list_response, indent=2)}")
+        else:
+            print("No tools list response received (timeout or process died)")
+            return
+        
+        # Step 4: Send tools/call request
+        print("\nSending tools/call request...")
+        call_tool_request = {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
             "params": {
                 "name": "analyze_csv_schema",
                 "arguments": {
@@ -132,7 +146,7 @@ def test_mcp_server():
         send_request(process, call_tool_request)
         
         # Read call_tool response
-        tool_response = read_streaming_response(process, expected_id=2, timeout=30.0)
+        tool_response = read_streaming_response(process, expected_id=3, timeout=30.0)
         if tool_response:
             print(f"\nTool response: {json.dumps(tool_response, indent=2)}")
         else:
