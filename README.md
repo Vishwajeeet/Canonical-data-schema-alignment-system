@@ -2,8 +2,8 @@
 
 > AI-powered backend that automatically maps messy, inconsistent CSV column names to a clean standardized schema — using Google Gemini for inference, with confidence scoring, validation rules, and a human review queue for uncertain decisions.
 
-**🔴 Live API →** `https://canonical-data-schema-alignment-system.onrender.com`   
-**📖 Interactive Docs →** `https://canonical-data-schema-alignment-system.onrender.com/docs`
+**🔴 Live API →** [https://canonical-data-schema-alignment-system.onrender.com](https://canonical-data-schema-alignment-system.onrender.com)  
+**📖 Interactive Docs →** [https://canonical-data-schema-alignment-system.onrender.com/docs](https://canonical-data-schema-alignment-system.onrender.com/docs)
 
 ---
 
@@ -28,7 +28,7 @@ This system does it automatically — AI infers the mapping, a validation layer 
 
 No setup needed. Open the interactive docs and test directly in browser:
 
-**`https://canonical-data-schema-alignment-system.onrender.com/docs`**
+**[https://canonical-data-schema-alignment-system.onrender.com/docs](https://canonical-data-schema-alignment-system.onrender.com/docs)**
 
 1. Click `POST /api/align` → `Try it out`
 2. Upload any CSV file
@@ -104,7 +104,7 @@ Analyze a CSV file and return schema mappings.
 
 **cURL:**
 ```bash
-curl -X POST https://canonical-data-schema-alignment-system.onrender.com/api/align \
+curl -X POST [https://canonical-data-schema-alignment-system.onrender.com/api/align](https://canonical-data-schema-alignment-system.onrender.com/api/align) \
   -F "file=@your_file.csv"
 ```
 
