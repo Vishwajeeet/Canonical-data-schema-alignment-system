@@ -1,9 +1,20 @@
 import json
-import subprocess
+import os
 from typing import List, Dict, TypedDict
+
+import google.generativeai as genai
+from dotenv import load_dotenv
 
 from src.mapping_contract import SchemaMapping
 from src.validator import validate_mapping
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Configure Gemini API
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
 
 
 class ReviewItem(TypedDict):
@@ -19,27 +30,19 @@ class ValidationResult(TypedDict):
 
 
 def call_ai(prompt: str) -> str:
+    """
+    Call Gemini API to generate schema mappings.
+    
+    Args:
+        prompt: The bounded prompt with CSV column samples and constraints
+    
+    Returns:
+        JSON array string of schema mappings, or "[]" on error
+    """
     try:
-        result = subprocess.run(
-            [
-                "opencode",
-                "run",
-                "-m",
-                "opencode/gpt-5-nano",
-                "--thinking", "false",
-                "--format", "json",
-                prompt,
-            ],
-            capture_output=True,
-            text=True,
-            timeout=120,
-            stdin=subprocess.DEVNULL,  # Explicitly close stdin
-        )
-        return result.stdout
-    except FileNotFoundError:
-        return "[]"
-    except subprocess.TimeoutExpired:
-        return "[]"
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        response = model.generate_content(prompt)
+        return response.text
     except Exception:
         return "[]"
 

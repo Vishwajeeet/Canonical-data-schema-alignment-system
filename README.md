@@ -1,483 +1,233 @@
 # Canonical Data Schema Alignment System
 
-An intelligent system for mapping arbitrary CSV column names to a standardized canonical schema using AI-powered analysis and human-in-the-loop validation.
+> AI-powered system that automatically maps messy, inconsistent CSV column names to a clean standardized schema — with human review for uncertain decisions.
 
-## Overview
+---
 
-This system solves the problem of data integration by:
-1. **Analyzing CSV files** to extract representative column samples
-2. **Generating schema mappings** using AI to suggest canonical field assignments
-3. **Validating mappings** against business rules and constraints
-4. **Queuing uncertain mappings** for human review and approval
-5. **Exposing functionality via MCP** (Model Context Protocol) for seamless integration
+## The Problem It Solves
 
-Perfect for data pipelines, ETL workflows, and multi-source data consolidation.
+Every company that works with data from multiple sources faces this:
 
-## Key Features
+| Source A | Source B | Source C | What it actually is |
+|----------|----------|----------|---------------------|
+| `cust_email` | `Email Address` | `contact` | → `email` |
+| `mob` | `Phone No.` | `contact_number` | → `phone_number` |
+| `DOB` | `date_birth` | `Birth Date` | → `date_of_birth` |
 
-- **AI-Powered Mapping**: Uses OpenCode LLM to intelligently infer column-to-schema relationships
-- **Intelligent Validation**: Validates mappings against configurable rules
-- **Human-in-the-Loop**: ReviewQueue system for approving uncertain mappings
-- **MCP Protocol Support**: Full Model Context Protocol integration for LLM integration
-- **Reliable Demo Mode**: Automatic fallback with realistic sample mappings
-- **Clean Architecture**: Modular design with separation of concerns
-- **Robust Error Handling**: Graceful degradation and subprocess I/O safety
+Mapping these manually is slow, error-prone, and doesn't scale.  
+This system does it automatically — using AI inference, validation rules, and a human review queue for uncertain cases.
 
-## System Architecture
+**Real-world use cases:** ETL pipelines, data warehouse ingestion, multi-vendor integrations, hospital/bank mergers, CRM data imports.
+
+---
+
+## How It Works
 
 ```
-CSV Input
-    ↓
-[Data Intake] → Extract column samples
-    ↓
-[Prompt Builder] → Create bounded AI prompt
-    ↓
-[AI Mapper] → Generate schema mappings (with robust parsing)
-    ↓
-[Validator] → Check mappings against rules
-    ↓
-├─→ Valid → [Accepted Mappings]
-└─→ Invalid → [Review Queue] → Human Decision
-    ↓
-[Output] → accepted + review_item_ids
+CSV File Input
+      ↓
+[Data Intake]       Extract column names + sample values
+      ↓
+[Prompt Builder]    Construct a bounded AI prompt
+      ↓
+[AI Mapper]         LLM infers column → canonical field mapping
+      ↓
+[Validator]         Check confidence scores + schema rules
+      ↓
+   ┌──┴──┐
+[Accept]       [Review Queue]  ← uncertain mappings held for human decision
 ```
 
-## Project Structure
+**Key design principle:** AI acts as a *recommender*, not an authority. Low-confidence or invalid mappings are never auto-accepted — they go to a human review queue with the reason for rejection.
+
+---
+
+## Demo
+
+**Input CSV columns:**
+```
+Email Address | Contact | Country | Full Name
+```
+
+**System Output:**
+```
+Email Address  →  email         (confidence: 0.96)  ✅ Accepted
+Contact        →  phone_number  (confidence: 0.92)  ✅ Accepted
+Country        →  country       (confidence: 0.97)  ✅ Accepted
+Full Name      →  first_name    (confidence: 0.65)  ❌ → Review Queue
+                                          reason: ambiguous (first vs full name)
+```
+
+**API Response:**
+```json
+{
+  "accepted": [
+    { "source_column": "Email Address", "target_field": "email", "confidence": 0.96 },
+    { "source_column": "Contact", "target_field": "phone_number", "confidence": 0.92 },
+    { "source_column": "Country", "target_field": "country", "confidence": 0.97 }
+  ],
+  "review_item_ids": [1]
+}
+```
+
+---
+
+## Architecture
 
 ```
 canonical-data-schema-alignment-system/
 ├── src/
-│   ├── __init__.py
-│   ├── alignment_service.py      # Main orchestration service
-│   ├── canonical_schema.py       # Schema definition
-│   ├── data_intake.py            # CSV parsing & sampling
-│   ├── prompt_builder.py         # AI prompt generation
-│   ├── ai_mapper.py              # AI invocation & parsing
-│   ├── mapping_contract.py       # Mapping data models
-│   ├── validator.py              # Validation rules
-│   ├── review_queue.py           # In-memory review system
-│   └── run_pipeline.py           # CLI entry point
-├── data/
-│   └── sample_contacts.csv       # Demo dataset
-├── mcp_server.py                 # MCP protocol server
-├── test_mcp_client.py            # Protocol compliance test
-├── venv/                         # Python environment
+│   ├── alignment_service.py   # Main orchestration — entry point for all integrations
+│   ├── canonical_schema.py    # Defines the standard target fields
+│   ├── data_intake.py         # CSV parsing and column sampling
+│   ├── prompt_builder.py      # Constructs bounded prompts for the LLM
+│   ├── ai_mapper.py           # LLM invocation with robust output parsing
+│   ├── validator.py           # Validation rules (confidence, field validity)
+│   ├── review_queue.py        # In-memory queue for human review decisions
+│   └── mapping_contract.py    # Pydantic data models for type safety
+├── mcp_server.py              # MCP protocol server (AI agent integration)
+├── test_mcp_client.py         # Protocol compliance tests
 └── README.md
 ```
 
-## Installation
+**Design decisions:**
+- **Pydantic models** for strict input/output contracts — no free-form dicts
+- **Subprocess stdin=DEVNULL** — prevents I/O deadlocks when running under FastMCP stdio
+- **Fallback mappings** — demo always produces meaningful output even when LLM is unavailable
+- **In-memory ReviewQueue** — stateless by design; suitable for pipeline invocation
 
-### Prerequisites
-- Python 3.9+
-- OpenCode CLI (for AI inference)
+---
 
-### Setup
+## Canonical Schema
+
+Default target fields:
+
+```
+email · phone_number · country · full_name · company_name
+street_address · city · state · postal_code · date_of_birth
+```
+
+Extend in `src/canonical_schema.py` — validator auto-updates.
+
+---
+
+## Quickstart
+
+**Prerequisites:** Python 3.9+, OpenCode CLI
 
 ```bash
-# Clone repository
+# Setup
+git clone https://github.com/Vishwajeeet/Canonical-data-schema-alignment-system
 cd canonical-data-schema-alignment-system
-
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate
-
-# Install dependencies
+python -m venv venv && source venv/bin/activate
 pip install fastmcp pydantic
 
-# Verify OpenCode is installed
-which opencode
-```
-
-## Usage
-
-### As a Python Module
-
-```python
+# Run on a CSV
+python -c "
 from src.alignment_service import analyze_csv_schema
-
 result = analyze_csv_schema('data/sample_contacts.csv')
-
-print("Accepted mappings:")
-for mapping in result['accepted']:
-    print(f"  {mapping['source_column']} → {mapping['target_field']} ({mapping['confidence']})")
-
-print(f"Review queue IDs: {result['review_item_ids']}")
+for m in result['accepted']:
+    print(f\"{m['source_column']} → {m['target_field']} ({m['confidence']:.2f})\")
+print(f\"Queued for review: {result['review_item_ids']}\")
+"
 ```
 
-### Via MCP Protocol
+---
 
-Start the MCP server:
+## MCP Integration
 
+This system is MCP-compliant — it can be called directly by LLM agents (Claude, GPT with tools, etc.) without any manual API calls.
+
+**Start the server:**
 ```bash
-source venv/bin/activate
 python mcp_server.py
 ```
 
-The server exposes one tool: `analyze_csv_schema(csv_path: str)`
+**Tool exposed:** `analyze_csv_schema(csv_path: str)`
 
-Run the test client to verify:
+**MCP Handshake:**
+```
+Client  ──initialize──►  Server
+        ◄──protocolVersion──
+        ──tools/list──►
+        ◄──[analyze_csv_schema]──
+        ──tools/call──►
+        ◄──{accepted, review_item_ids}──
+```
 
+**Test protocol compliance:**
 ```bash
 python test_mcp_client.py
 ```
 
-Output shows:
-```json
-{
-  "accepted": [
-    {
-      "source_column": "Email Address",
-      "target_field": "email",
-      "confidence": 0.95,
-      "reasoning": "..."
-    }
-  ],
-  "review_item_ids": [1, 2]
-}
-```
+---
 
 ## Core Components
 
-### `alignment_service.py`
-Main orchestration service that:
-- Extracts column samples from CSV
-- Builds AI prompt with constraints
-- Calls AI mapper and validates results
-- **Uses fallback mappings if AI fails** (ensures demo reliability)
-- Integrates ReviewQueue for uncertain mappings
+### `alignment_service.py` — Orchestration Layer
+Central callable that coordinates all pipeline stages. Designed as a pure function so it can be safely invoked from MCP servers, REST APIs, or batch scripts without side effects.
 
-### `ai_mapper.py`
-AI integration with **robust output handling**:
-- Calls OpenCode LLM with timeout protection
-- Parses mixed text+JSON responses
-- Handles subprocess I/O safely (`stdin=DEVNULL` prevents deadlocks)
-- Returns empty array `[]` on any error
-- Gracefully degrades when AI unavailable
+### `ai_mapper.py` — LLM Integration
+Calls the LLM with timeout protection (120s), handles mixed text+JSON output, and gracefully degrades when AI is unavailable. Uses `stdin=DEVNULL` to prevent subprocess deadlocks under FastMCP.
 
-**Key Fix:** Subprocess stdin handling prevents FastMCP stdio protocol hangs
+### `validator.py` — Rule Engine
+Validates every mapping before acceptance: required fields present, confidence in [0.0, 1.0], target field exists in canonical schema. Returns structured failure reasons.
 
-### `review_queue.py`
-In-memory review system:
-- Auto-incrementing item IDs (starts at 1)
-- Status tracking: `pending`, `approved`, `rejected`
-- Simple O(1) key-value storage
-- No persistence (by design - suitable for demo/testing)
+### `review_queue.py` — Human-in-the-Loop
+O(1) in-memory store for uncertain mappings. Tracks status: `pending → approved / rejected`. Designed for demo/pipeline use — swap with a DB-backed store for production.
 
-**Methods:**
-- `add_item(mapping: dict, reason: str) → int` - Add and return ID
-- `list_items(status: str = None) → List[dict]` - Get items (optional filter)
-- `get_item(item_id: int) → dict | None` - Retrieve by ID
-- `resolve_item(item_id: int, decision: str) → bool` - Approve/reject
-
-### `validator.py`
-Mapping validation rules:
-- Checks required fields present
-- Validates confidence scores (0.0 to 1.0)
-- Ensures valid target_field values
-- Returns detailed failure reasons
-
-### `mapping_contract.py`
-Pydantic models for type safety:
-- `SchemaMapping`: individual field mapping
-- Input/output validation
-- JSON serialization/deserialization
-
-## API Reference
-
-### `analyze_csv_schema(csv_path: str) → dict`
-
-**Input:**
-- `csv_path`: Path to CSV file with headers
-
-**Output:**
-```python
-{
-    "accepted": [                    # List of valid SchemaMapping dicts
-        {
-            "source_column": str,    # CSV column name
-            "target_field": str,     # Canonical field name
-            "confidence": float,     # 0.0-1.0 score
-            "reasoning": str         # Explanation
-        },
-        ...
-    ],
-    "review_item_ids": [int, ...]   # IDs for uncertain mappings in ReviewQueue
-}
-```
-
-**Fallback Behavior:**
-When AI returns no valid mappings, system automatically returns:
-```python
-[
-    {"source_column": "email", "target_field": "email", "confidence": 0.95},
-    {"source_column": "phone", "target_field": "phone_number", "confidence": 0.92},
-    {"source_column": "country", "target_field": "country", "confidence": 0.98}
-]
-```
-Prints `[FALLBACK USED]` to stderr. Demo always shows meaningful output.
-
-## Canonical Schema
-
-Default fields:
-```
-email, phone_number, country, full_name, company_name,
-street_address, city, state, postal_code, date_of_birth
-```
-
-Edit `src/canonical_schema.py` to extend.
-
-## MCP Protocol Details
-
-Fully compliant with:
-- **FastMCP 3.2.4** reference implementation
-- **Model Context Protocol 2024-11-05** specification
-
-### Handshake Flow
-```
-CLIENT                              SERVER
-   |--initialize (id=1)------------>|
-   |<--result (protocolVersion)-----|
-   |
-   |--notifications/initialized---->|
-   |
-   |--tools/list (id=2)------------>|
-   |<--result (tools array)---------|
-   |
-   |--tools/call (id=3)------------>|
-   |<--result (mapping content)-----|
-```
-
-### Request Format
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 3,
-  "method": "tools/call",
-  "params": {
-    "name": "analyze_csv_schema",
-    "arguments": {"csv_path": "data/sample_contacts.csv"}
-  }
-}
-```
-
-### Response Format
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 3,
-  "result": {
-    "content": [
-      {
-        "type": "text",
-        "text": "{\"accepted\":[...],\"review_item_ids\":[...]}"
-      }
-    ],
-    "structuredContent": {...},
-    "isError": false
-  }
-}
-```
-
-## Performance
-
-- **CSV parsing**: O(n) where n = number of rows
-- **AI inference**: ~14-15 seconds (depends on OpenCode)
-- **Validation**: O(m) where m = number of mappings
-- **Review queue**: O(1) for all operations (in-memory dict)
-
-Memory footprint scales with CSV size and mapping count, not with canonical schema size.
+---
 
 ## Error Handling
 
 | Scenario | Behavior |
 |----------|----------|
-| CSV file not found | Returns `{"error": "..."}` |
-| AI inference timeout (120s) | Returns empty array → **fallback triggers** |
-| Subprocess I/O error | Gracefully degrades with fallback |
-| Invalid mapping JSON | Skips item, continues validation |
-| Corrupt AI output | Extracts valid JSON array from output |
-| Validation failure | Adds to review queue with reason |
+| CSV not found | Returns `{"error": "..."}` with message |
+| LLM timeout (120s) | Falls back to sample mappings, logs `[FALLBACK USED]` |
+| Malformed LLM output | Extracts valid JSON array, skips corrupt items |
+| Validation failure | Routes to review queue with failure reason |
+| Subprocess I/O error | Gracefully degrades, fallback triggers |
 
-## Development
+---
 
-### Running Tests
+## Performance
 
-```bash
-# Test MCP protocol compliance (full handshake + tool execution)
-python test_mcp_client.py
+| Operation | Complexity |
+|-----------|------------|
+| CSV parsing | O(n) rows |
+| LLM inference | ~14–15s (OpenCode dependent) |
+| Validation | O(m) mappings |
+| Review queue ops | O(1) — dict-backed |
 
-# Direct function test
-python -c "from src.alignment_service import analyze_csv_schema; \
-           result = analyze_csv_schema('data/sample_contacts.csv'); \
-           print(f'Accepted: {len(result[\"accepted\"])}, Review: {len(result[\"review_item_ids\"])}')"
-
-# Test with custom CSV
-python -c "from src.alignment_service import analyze_csv_schema; \
-           print(analyze_csv_schema('path/to/your.csv'))"
-```
-
-### Adding Custom Validation Rules
-
-Edit `src/validator.py`:
-```python
-def validate_mapping(mapping: SchemaMapping) -> tuple[bool, str]:
-    # Add custom rules
-    if mapping.confidence < 0.5:
-        return False, "Confidence threshold not met"
-    if mapping.target_field not in ALLOWED_FIELDS:
-        return False, "Target field not in canonical schema"
-    return True, ""
-```
-
-### Extending Canonical Schema
-
-Edit `src/canonical_schema.py`:
-```python
-class CanonicalSchema:
-    email: str
-    phone_number: str
-    # Add your custom fields
-    custom_field: str
-```
-
-Then update validator rules accordingly.
-
-## Troubleshooting
-
-**MCP timeout on tools/call:**
-- Verify OpenCode is installed: `which opencode`
-- Confirm CSV file exists and is readable
-- Check system has ~20 seconds available for AI inference
-- Review stderr for `[FALLBACK USED]` message
-
-**Empty accepted results:**
-- **Expected in demo mode** → fallback automatically provides sample mappings
-- Check stderr contains `[FALLBACK USED]`
-- Verify CSV has recognizable column names (e.g., email, phone, country)
-
-**Subprocess errors (hung FastMCP server):**
-- **Root cause:** stdin not properly closed in subprocess
-- **Fix:** Ensure `stdin=subprocess.DEVNULL` is set in `call_ai()`
-- Prevents stdio protocol deadlock when FFastMCP waits for server response
-
-**Cannot import modules:**
-- Verify venv is activated: `source venv/bin/activate`
-- Confirm fastmcp installed: `pip install fastmcp`
-- Check Python path: `python -c "import sys; print(sys.path)"`
-
-## Architecture Decisions
-
-1. **In-Memory ReviewQueue** - No persistence for demo/testing simplicity
-2. **Fallback Mappings** - Ensures demo always shows meaningful output
-3. **Subprocess stdin=DEVNULL** - Prevents I/O deadlocks in FastMCP
-4. **Pydantic Validation** - Type safety and automatic serialization
-5. **Async MCP Tool** - Sync wrapper to prevent thread issues with subprocess
+---
 
 ## Known Limitations
 
-- ReviewQueue data lost on server restart (design choice)
-- Cannot handle CSV larger than available RAM (streaming not implemented)
-- AI inference speed depends on OpenCode availability
-- Canonical schema must be manually extended
-
-## Future Enhancements
-
-- [ ] Persistent ReviewQueue with database backend
-- [ ] Streaming CSV processing for large files
-- [ ] Batch mapping API for multiple CSVs
-- [ ] Confidence threshold configuration
-- [ ] Custom validation rule registry
-- [ ] Web UI for review management
-
-## License
-
-Proprietary
-
-## Contact
-
-Vishwajeet  
-Email: vishwajeet@example.com
+- ReviewQueue is in-memory — data does not persist across restarts (by design for this version)
+- CSV only — JSON/Excel ingestion not yet implemented
+- LLM inference speed depends on local OpenCode availability
+- Canonical schema requires manual extension
 
 ---
 
-**Last Updated:** April 18, 2026  
-**Version:** 1.0.0  
-**Status:** Production Ready
+## Roadmap
 
-## Key Design Principles
-
-- **AI as a recommender, not an authority**
-- **Strict contracts over free-form outputs**
-- **Deterministic validation over probabilistic trust**
-- **Separation of decision logic from execution**
-- **Explainability and auditability by design**
+- [ ] FastAPI REST layer (`POST /api/align`) for direct HTTP integration
+- [ ] Persistent ReviewQueue with SQLite/PostgreSQL backend
+- [ ] Streaming CSV support for large files (> RAM)
+- [ ] Batch API — process multiple CSVs in one call
+- [ ] Web UI for human review management
 
 ---
 
-## End-to-End Demo
+## Tech Stack
 
-### Input CSV
-```
-Email Address, Contact, Country, Full Name
-```
-
-### System Output
-```
-Email Address → email        (confidence: 0.96)  ✔
-Contact       → phone_number (confidence: 0.92)  ✔
-Country       → country      (confidence: 0.97)  ✔
-Full Name     → first_name   (confidence: 0.65)  ✗  (rejected: ambiguous)
-```
-
-Only high-confidence, schema-safe mappings are accepted. Ambiguous mappings are explicitly rejected for manual review.
+`Python 3.9+` · `FastMCP 3.2.4` · `Pydantic` · `OpenCode LLM` · `MCP Protocol 2024-11-05`
 
 ---
 
-## Project Scope
+## Author
 
-### What this system does
-- Produces validated schema alignment decisions
-- Prevents low-confidence or invalid mappings
-- Handles real-world LLM integration issues (streaming output, model failures)
-
-### What this system does NOT do
-- Modify CSV files
-- Write to production databases
-- Execute data transformations
-
-Downstream systems are expected to apply accepted mappings with appropriate human or automated approval workflows.
-
----
----
-
-## Application Service Layer
-
-To enable safe integration with external systems and AI agents, the core schema-alignment pipeline has been refactored behind an internal **Application Service Layer**.
-
-This service layer:
-
-- Orchestrates the alignment pipeline as a pure callable function
-- Decouples business logic from CLI-based execution
-- Returns structured, validated mapping decisions
-- Decouples the core decision engine from execution context, enabling safe invocation across integration surfaces such as MCP servers, REST APIs, or batch ingestion workflows.
-
-This allows upstream systems (e.g., ingestion pipelines, orchestration workflows, AI agents) to programmatically invoke schema analysis without embedding execution logic or interacting with CLI entrypoints.
-
-Example usage:
-
-```python
-from src.alignment_service import analyze_csv_schema
-
-mappings = analyze_csv_schema("vendor_dataset.csv")
-```
-
-This architectural boundary ensures the decision engine can be safely reused across integration surfaces such as MCP servers, REST APIs, or batch ingestion workflows.
-
-## Project Status
-
-**Core schema alignment engine completed.**
-
-**Planned next phase:**
-- MCP server layer to expose the engine as callable tools
-- Human review workflows for rejected mappings
-- Extended field decomposition (e.g., full name splitting)
+**Vishwajeet Mishra**  
+B.Tech CSE (AI & ML) — Brainware University  
+[GitHub](https://github.com/Vishwajeeet) · [Email](mailto:vishwajeet@example.com)
